@@ -6,7 +6,19 @@ const fs = require("fs");
 const blacklistDB = require("../databases/blacklist");
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, "../../logs.json"), "utf8"));
 const roleConfig = JSON.parse(fs.readFileSync(path.join(__dirname, "../../blacklistrole.json"), "utf8"));
+const keywordData = JSON.parse(fs.readFileSync(path.join(__dirname, "../../autofill.json"), "utf8"));
 const BLACKLIST_ROLE_IDS = roleConfig.roleIds || [];
+const keywordMap = keywordData.keywords || {};
+
+function getParsedReason(inputReason) {
+    const lowerInput = inputReason.toLowerCase();
+    for (const [keyword, explanation] of Object.entries(keywordMap)) {
+        if (lowerInput.includes(keyword.toLowerCase())) {
+            return explanation;
+        }
+    }
+    return inputReason;
+}
 
 async function logBlacklistAction(client, user, executor, action, reason = "No reason provided") {
     const logChannelId = config.logChannels?.["globalBan"];
@@ -35,7 +47,7 @@ module.exports = {
             sub.setName("add")
                 .setDescription("Add a user to the global blacklist")
                 .addUserOption(opt => opt.setName("user").setDescription("User to blacklist").setRequired(true))
-                .addStringOption(opt => opt.setName("reason").setDescription("Reason for blacklisting")))
+                .addStringOption(opt => opt.setName("reason").setDescription("Reason for blacklisting").setRequired(true)))
         .addSubcommand(sub =>
             sub.setName("remove")
                 .setDescription("Remove a user from the global blacklist")
@@ -44,7 +56,8 @@ module.exports = {
     run: async (client, interaction) => {
         const sub = interaction.options.getSubcommand();
         const user = interaction.options.getUser("user");
-        const reason = interaction.options.getString("reason") || "No reason provided";
+        const inputReason = interaction.options.getString("reason") || "No reason provided";
+        const reason = getParsedReason(inputReason);
 
         if (sub === "add") {
             blacklistDB.add(user.id, interaction.user.id, reason);
