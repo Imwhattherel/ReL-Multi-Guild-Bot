@@ -1,0 +1,16 @@
+
+{
+  "logChannels": {
+    "globalBan": "",
+    "messageLogs": "",
+    "Unbans": "",
+    "globalTimeout": "",
+    "globalUnban": "",
+    "tempRoles":"",
+    "permRoles":"",
+    "globalKick": "",
+    "memberLeave": "",
+    "nicknameLogs": ""
+
+  }
+}
