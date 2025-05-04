@@ -2,8 +2,20 @@ const { EmbedBuilder, PermissionFlagsBits } = require("discord.js");
 const { SlashCommandBuilder } = require("@discordjs/builders");
 const fs = require("fs");
 
-
+// Load config and keyword reason mapping
 const config = JSON.parse(fs.readFileSync("./logs.json", "utf8"));
+const keywordData = JSON.parse(fs.readFileSync("./autofill.json", "utf8"));
+const keywordMap = keywordData.keywords || {};
+
+function getParsedReason(inputReason) {
+    const lowerInput = inputReason.toLowerCase();
+    for (const [keyword, explanation] of Object.entries(keywordMap)) {
+        if (lowerInput.includes(keyword.toLowerCase())) {
+            return explanation;
+        }
+    }
+    return inputReason;
+}
 
 async function logGlobalBan(client, user, executor, reason, banCount) {
     const logChannelId = config.logChannels["globalBan"];
@@ -14,8 +26,8 @@ async function logGlobalBan(client, user, executor, reason, banCount) {
 
     const logEmbed = new EmbedBuilder()
         .setTitle("User Globally Banned")
-        .setDescription(`<@${user.id}> has been globally banned From **${banCount}** Guilds by <@${executor.id}>. `)
-        .setThumbnail(user.displayAvatarURL({ dynamic: true })) 
+        .setDescription(`<@${user.id}> has been globally banned from **${banCount}** guilds by <@${executor.id}>.`)
+        .setThumbnail(user.displayAvatarURL({ dynamic: true }))
         .addFields(
             { name: "Username", value: `\`${user.tag}\``, inline: true },
             { name: "User ID", value: `\`${user.id}\``, inline: true },
@@ -23,7 +35,7 @@ async function logGlobalBan(client, user, executor, reason, banCount) {
             { name: "Reason", value: `\`\`\`${reason}\`\`\``, inline: false },
             { name: "Total Guilds Banned From", value: `${banCount}`, inline: true }
         )
-        .setColor(0xff0000) 
+        .setColor(0xff0000)
         .setFooter({
             text: "Global Ban System Powered By - ReL Studios",
             iconURL: client.user.displayAvatarURL()
@@ -41,15 +53,15 @@ async function logGlobalUnban(client, user, executor, unbanCount) {
 
     const logEmbed = new EmbedBuilder()
         .setTitle("User Globally Unbanned")
-        .setDescription(`<@${user.id}> has been globally unbanned From **${unbanCount}** Guilds by <@${executor.id}>. `)
-        .setThumbnail(user.displayAvatarURL({ dynamic: true })) 
+        .setDescription(`<@${user.id}> has been globally unbanned from **${unbanCount}** guilds by <@${executor.id}>.`)
+        .setThumbnail(user.displayAvatarURL({ dynamic: true }))
         .addFields(
             { name: "Username", value: `\`${user.tag}\``, inline: true },
             { name: "User ID", value: `\`${user.id}\``, inline: true },
             { name: "Action Performed By", value: `<@${executor.id}>`, inline: true },
             { name: "Total Guilds Unbanned From", value: `${unbanCount}`, inline: true }
         )
-        .setColor(0x00ff00) 
+        .setColor(0x00ff00)
         .setFooter({
             text: "Global Ban System Powered By - ReL Studios",
             iconURL: client.user.displayAvatarURL()
@@ -90,41 +102,39 @@ module.exports = {
     run: async (client, interaction) => {
         const subcommand = interaction.options.getSubcommand();
         const Target = interaction.options.getUser("user");
-        const Reason = interaction.options.getString("reason") || "No reason provided";
+        const InputReason = interaction.options.getString("reason") || "No reason provided";
+        const Reason = getParsedReason(InputReason);
+
         let BanCount = 0;
         let UnbanCount = 0;
 
         await interaction.deferReply({ ephemeral: false });
 
         if (subcommand === "set") {
-            try {
-                const NotifyUser = new EmbedBuilder()
-                    .setTitle("Globally Banned")
-                    .setDescription("You have been globally banned from all associated servers.")
-                    .setThumbnail(Target.displayAvatarURL({ dynamic: true })) 
-                    .addFields(
-                        { name: "Reason", value: `\`\`\`${Reason}\`\`\`` },
-                        { name: "Banned By", value: `<@${interaction.user.id}>` }
-                    )
-                    .setColor(0xff0000)
-                    .setFooter({
-                        text: "Global Ban System Powered By - ReL Studios",
-                        iconURL: client.user.displayAvatarURL()
-                    });
+            const NotifyUser = new EmbedBuilder()
+                .setTitle("Globally Banned")
+                .setDescription("You have been globally banned from all associated servers.")
+                .setThumbnail(Target.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: "Reason", value: `\`\`\`${Reason}\`\`\`` },
+                    { name: "Banned By", value: `<@${interaction.user.id}>` }
+                )
+                .setColor(0xff0000)
+                .setFooter({
+                    text: "Global Ban System Powered By - ReL Studios",
+                    iconURL: client.user.displayAvatarURL()
+                });
 
-                await Target.send({ embeds: [NotifyUser] }).catch(() => console.log("Could not notify user via DM."));
-            } catch (error) {
-                console.log(`Could not send DM to ${Target.tag}: ${error.message}`);
-            }
+            await Target.send({ embeds: [NotifyUser] }).catch(() => console.log("Could not notify user via DM."));
 
             for (const guild of client.guilds.cache.values()) {
                 try {
                     await guild.bans.create(Target.id, {
-                        reason: `Global ban requested by ${interaction.user.id} (${interaction.user.tag}) - ${Reason}`
+                        reason: `Global ban by ${interaction.user.tag} - ${Reason}`
                     });
                     BanCount++;
                 } catch (error) {
-                    console.log(`Failed to ban ${Target.tag} in ${guild.name}: ${error.message}`);
+                    console.log(`Failed to ban in ${guild.name}: ${error.message}`);
                 }
             }
 
@@ -137,7 +147,7 @@ module.exports = {
                     await guild.bans.remove(Target.id);
                     UnbanCount++;
                 } catch (error) {
-                    console.log(`Failed to unban ${Target.tag} in ${guild.name}: ${error.message}`);
+                    console.log(`Failed to unban in ${guild.name}: ${error.message}`);
                 }
             }
 
@@ -145,13 +155,13 @@ module.exports = {
         }
 
         const responseEmbed = new EmbedBuilder()
-            .setTitle(`User Globally ${subcommand === "set" ? "Banned" : "Unbaned"}`)
-            .setDescription(`<@${Target.id}> has been globally ${subcommand === "set" ? "banned" : "unbanned"}  From **${subcommand === "set" ? BanCount : UnbanCount}** Guilds by <@${interaction.user.id}>.`)
-            .setThumbnail(Target.displayAvatarURL({ dynamic: true })) 
+            .setTitle(`User Globally ${subcommand === "set" ? "Banned" : "Unbanned"}`)
+            .setDescription(`<@${Target.id}> has been globally ${subcommand === "set" ? "banned" : "unbanned"} from **${subcommand === "set" ? BanCount : UnbanCount}** guilds.`)
+            .setThumbnail(Target.displayAvatarURL({ dynamic: true }))
             .addFields(
                 { name: "Username", value: `\`${Target.tag}\``, inline: true },
                 { name: "User ID", value: `\`${Target.id}\``, inline: true },
-                { name: "Action Performed By", value: `<@${interaction.user.id}>`, inline: true },
+                { name: "Action Performed By", value: `<@${interaction.user.id}>`, inline: true }
             )
             .setColor(subcommand === "set" ? 0xff0000 : 0x00ff00)
             .setFooter({
